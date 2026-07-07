@@ -141,28 +141,62 @@ def recommend(maximize=None, mins=None, n_global=30000, n_local=6000, seed=0):
     }
 
 
+def _find_asset(name):
+    here = os.path.dirname(__file__)
+    for p in (os.path.join(here, "..", name), os.path.join(os.getcwd(), name),
+              name, os.path.join(here, name)):
+        if os.path.exists(p):
+            return p
+    return None
+
+
+# Vercel 단일 엔트리포인트가 모든 경로를 이 함수로 보내므로,
+# 정적 파일(index.html 등)도 함수가 직접 서빙한다.
+_ASSETS = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/chart.umd.min.js": ("chart.umd.min.js", "application/javascript; charset=utf-8"),
+    "/convergence.json": ("convergence.json", "application/json; charset=utf-8"),
+}
+
+
 class handler(BaseHTTPRequestHandler):
-    def _send(self, code, body):
-        data = json.dumps(body).encode("utf-8")
+    def _raw(self, code, data, ctype):
+        if isinstance(data, str):
+            data = data.encode("utf-8")
         self.send_response(code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
+    def _json(self, code, body):
+        self._raw(code, json.dumps(body), "application/json; charset=utf-8")
+
+    def do_GET(self):
+        path = self.path.split("?")[0]
+        if path in _ASSETS:
+            fname, ctype = _ASSETS[path]
+            fp = _find_asset(fname)
+            if fp:
+                with open(fp, "rb") as f:
+                    return self._raw(200, f.read(), ctype)
+            return self._json(404, {"error": f"{fname} not found"})
+        if path == "/api/recommend":            # 헬스체크
+            try:
+                return self._json(200, {"ok": True, "oracle_r2": _state()["r2"]})
+            except Exception as e:
+                return self._json(500, {"error": str(e)})
+        return self._json(404, {"error": "not found"})
+
     def do_POST(self):
+        if self.path.split("?")[0] != "/api/recommend":
+            return self._json(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(n) or b"{}")
             out = recommend(maximize=req.get("maximize") or None,
                             mins=req.get("mins", {}) or {})
-            self._send(200, out)
+            self._json(200, out)
         except Exception as e:
-            self._send(500, {"error": str(e)})
-
-    def do_GET(self):
-        # 헬스체크 겸용
-        try:
-            self._send(200, {"ok": True, "oracle_r2": _state()["r2"]})
-        except Exception as e:
-            self._send(500, {"error": str(e)})
+            self._json(500, {"error": str(e)})
