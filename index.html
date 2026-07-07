@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>필름 배합 추천 시스템</title>
+<script src="/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#eef2f7; --card:#fff; --ink:#1e293b; --sub:#64748b; --line:#e2e8f0;
+    --accent:#c0392b; --accent2:#2c3e50; --ok:#16a34a; --bad:#dc2626;
+    --nav-h:58px; --side-w:236px;
+  }
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{ margin:0; font-family:"Segoe UI",system-ui,sans-serif; color:var(--ink);
+        background:linear-gradient(160deg,#eef2f7,#e2e8f0); }
+
+  /* ---------- Navbar ---------- */
+  .navbar{ position:fixed; top:0; left:0; right:0; height:var(--nav-h); z-index:40;
+    display:flex; align-items:center; gap:14px; padding:0 18px;
+    background:rgba(15,23,42,.96); color:#fff; backdrop-filter:blur(6px);
+    box-shadow:0 2px 14px rgba(15,23,42,.18); }
+  .navbar .brand{ font-weight:700; font-size:16px; letter-spacing:.01em; }
+  .navbar .brand small{ color:#94a3b8; font-weight:500; margin-left:6px; font-size:12px; }
+  .navbar .nav-links{ margin-left:auto; display:flex; gap:20px; }
+  .navbar .nav-links a{ color:#cbd5e1; text-decoration:none; font-size:14px; }
+  .navbar .nav-links a:hover{ color:#fff; }
+  .hamb{ display:none; flex-direction:column; gap:4px; cursor:pointer; padding:6px; }
+  .hamb span{ width:22px; height:2px; background:#fff; border-radius:2px; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{ position:fixed; top:var(--nav-h); bottom:0; left:0; width:var(--side-w);
+    background:#fff; border-right:1px solid var(--line); padding:20px 16px; z-index:35;
+    overflow-y:auto; transition:transform .28s ease; }
+  .sidebar h3{ font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--sub); margin:4px 0 10px; }
+  .sidebar a.side-link{ display:block; padding:8px 10px; border-radius:8px; color:var(--ink);
+    text-decoration:none; font-size:14px; }
+  .sidebar a.side-link:hover{ background:#f1f5f9; }
+  .preset{ display:block; width:100%; text-align:left; margin:6px 0; padding:10px 12px;
+    border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer;
+    font-size:13px; transition:.15s; }
+  .preset:hover{ border-color:var(--accent); color:var(--accent); transform:translateX(2px); }
+  .preset b{ display:block; font-size:13px; } .preset span{ color:var(--sub); font-size:12px; }
+  .overlay{ position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:34;
+    opacity:0; pointer-events:none; transition:opacity .25s; }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+
+  /* ---------- Layout ---------- */
+  main{ margin-left:var(--side-w); padding:calc(var(--nav-h) + 28px) 24px 60px; }
+  .container{ max-width:960px; margin:0 auto; }
+  section{ margin-bottom:46px; scroll-margin-top:calc(var(--nav-h) + 12px); }
+  .sec-head{ font-size:26px; margin:0 0 6px; text-align:center; }
+  .sec-desc{ color:var(--sub); font-size:14px; margin:0 auto 22px; text-align:center; max-width:660px; }
+
+  /* ---------- Hero 첫화면 ---------- */
+  .hero{ position:relative; overflow:hidden; min-height:100vh;
+    margin:calc(-1 * (var(--nav-h) + 28px)) -24px 44px;
+    padding:calc(var(--nav-h) + 20px) 24px 40px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    background:linear-gradient(120deg,#eef3f9,#e4ecf5,#efe6ef,#e3efe9);
+    background-size:320% 320%; animation:gradShift 22s ease-in-out infinite; }
+  @keyframes gradShift{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+  .blob{ position:absolute; border-radius:50%; filter:blur(64px); opacity:.55; z-index:0; pointer-events:none; }
+  .b1{ width:440px; height:440px; top:-90px; left:-70px;
+    background:radial-gradient(circle,#f3b7ad,transparent 70%); animation:float1 24s ease-in-out infinite; }
+  .b2{ width:500px; height:500px; bottom:-140px; right:-90px;
+    background:radial-gradient(circle,#a9c3e0,transparent 70%); animation:float2 28s ease-in-out infinite; }
+  .b3{ width:360px; height:360px; top:40%; left:55%;
+    background:radial-gradient(circle,#c9b7e6,transparent 70%); opacity:.4; animation:float1 32s ease-in-out infinite; }
+  @keyframes float1{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(46px,34px)} }
+  @keyframes float2{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(-46px,-34px)} }
+  .hero-content{ position:relative; z-index:1; }
+  .hero-title{ font-size:58px; line-height:1.1; margin:0 0 18px; letter-spacing:-.02em; font-weight:800;
+    background:linear-gradient(90deg,#c0392b,#2c3e50); -webkit-background-clip:text; background-clip:text; color:transparent;
+    opacity:0; animation:fadeUp .9s cubic-bezier(.2,.7,.2,1) .15s forwards; }
+  .hero-sub{ font-size:18px; color:#475569; max-width:640px; margin:0 auto 32px; line-height:1.65;
+    opacity:0; animation:fadeUp .9s cubic-bezier(.2,.7,.2,1) .4s forwards; }
+  .hero-cta{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap;
+    opacity:0; animation:fadeUp .9s cubic-bezier(.2,.7,.2,1) .65s forwards; }
+  .btn-primary{ background:var(--accent); color:#fff; padding:14px 30px; border-radius:11px;
+    text-decoration:none; font-weight:600; font-size:15px; box-shadow:0 10px 24px rgba(192,57,43,.28); transition:.16s; }
+  .btn-primary:hover{ background:#a5321f; transform:translateY(-2px); }
+  .btn-ghost{ background:rgba(255,255,255,.72); color:var(--ink); padding:14px 26px; border-radius:11px;
+    text-decoration:none; font-weight:600; font-size:15px; border:1px solid var(--line); transition:.16s; }
+  .btn-ghost:hover{ background:#fff; transform:translateY(-2px); }
+  .scroll-cue{ position:absolute; bottom:26px; left:50%; transform:translateX(-50%); color:var(--sub);
+    font-size:12px; z-index:1; opacity:0; animation:fadeUp .9s ease 1s forwards, bob 2s ease-in-out 1.6s infinite; }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(34px)} to{opacity:1; transform:none} }
+  @keyframes bob{ 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,7px)} }
+  @media(max-width:600px){ .hero-title{ font-size:38px; } .hero-sub{ font-size:16px; } }
+  @media(prefers-reduced-motion:reduce){
+    .hero,.blob,.hero-title,.hero-sub,.hero-cta,.scroll-cue{ animation:none; opacity:1; } }
+
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  @media(max-width:820px){ .grid{ grid-template-columns:1fr; } }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:22px; box-shadow:0 6px 24px rgba(15,23,42,.06); }
+  .card h2{ font-size:15px; margin:0 0 16px; }
+
+  table{ width:100%; border-collapse:collapse; }
+  th,td{ text-align:left; padding:9px 6px; font-size:14px; }
+  thead th{ color:var(--sub); font-weight:600; font-size:12px; border-bottom:1px solid var(--line); }
+  .prop-row td{ border-bottom:1px solid #f1f5f9; }
+  input[type=number]{ width:90px; padding:6px 8px; border:1px solid var(--line);
+    border-radius:8px; font-size:14px; }
+  input[type=number]:disabled{ background:#f8fafc; color:#cbd5e1; }
+  .nonemax{ margin-top:10px; font-size:13px; display:flex; align-items:center; gap:7px;
+    color:var(--sub); cursor:pointer; }
+  button.go{ margin-top:18px; width:100%; padding:12px; border:0; border-radius:10px;
+    background:var(--accent); color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
+  button.go:hover{ background:#a5321f; } button.go:disabled{ opacity:.6; cursor:default; }
+  .result-empty{ color:var(--sub); font-size:14px; text-align:center; padding:40px 0; }
+  .badge{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+  .badge.ok{ background:#dcfce7; color:var(--ok); } .badge.bad{ background:#fee2e2; color:var(--bad); }
+  .rec-table td.val{ text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .rec-table td.unit{ color:var(--sub); width:44px; }
+  .sec-title{ font-size:12px; color:var(--sub); text-transform:uppercase; letter-spacing:.06em;
+    margin:18px 0 6px; }
+  .hl{ color:var(--accent); font-weight:700; } .chk{ color:var(--ok); } .cross{ color:var(--bad); }
+  .foot{ margin-top:14px; font-size:12px; color:var(--sub); line-height:1.5; }
+  .chart-box{ position:relative; height:300px; }
+  .stat{ display:inline-block; margin:0 18px 8px 0; }
+  .stat b{ font-size:22px; color:var(--accent); } .stat span{ color:var(--sub); font-size:12px; display:block; }
+
+  /* ---------- Scroll reveal ---------- */
+  .reveal{ opacity:0; transform:translateY(24px); transition:opacity .6s ease, transform .6s ease; }
+  .reveal.visible{ opacity:1; transform:none; }
+
+  @media(max-width:900px){
+    .navbar .nav-links{ display:none; }
+    .hamb{ display:flex; }
+    .sidebar{ transform:translateX(-100%); box-shadow:6px 0 24px rgba(15,23,42,.15); }
+    .sidebar.open{ transform:translateX(0); }
+    main{ margin-left:0; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="hamb" id="hamb"><span></span><span></span><span></span></div>
+  <div class="brand">필름 배합 추천 <small>ML + 최적화</small></div>
+  <div class="nav-links">
+    <a href="#recommend">추천</a>
+    <a href="#analysis">표본 효율 분석</a>
+    <a href="#about">모델 정보</a>
+  </div>
+</nav>
+
+<div class="overlay" id="overlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <h3>바로가기</h3>
+  <a class="side-link" href="#recommend">① 배합 추천</a>
+  <a class="side-link" href="#analysis">② 표본 효율 분석</a>
+  <a class="side-link" href="#about">③ 모델 정보</a>
+  <h3 style="margin-top:22px">시나리오 프리셋</h3>
+  <button class="preset" data-max="barrier" data-mins='{"tensile_strength":50,"transparency":85}'>
+    <b>포장 필름</b><span>차단성 최대화 · 투명85 · 강도50</span></button>
+  <button class="preset" data-max="transparency" data-mins='{"tensile_strength":45}'>
+    <b>투명 필름</b><span>투명도 최대화 · 강도45</span></button>
+  <button class="preset" data-max="tensile_strength" data-mins='{"transparency":70}'>
+    <b>고강도 필름</b><span>인장강도 최대화 · 투명70</span></button>
+  <button class="preset" data-max="" data-mins='{"tensile_strength":55,"transparency":80}'>
+    <b>균형형</b><span>최대화 없이 제약만 · 균형 최적</span></button>
+</aside>
+
+<main>
+
+  <!-- Hero 첫화면 -->
+  <section class="hero">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="hero-content">
+      <h1 class="hero-title">필름 배합 추천 시스템</h1>
+      <p class="hero-sub">원하는 물성 조건만 입력하면, 학습된 ML 예측 모델과 최적화 엔진이
+         조건을 만족하는 <b>최적 배합·공정 조건</b>을 최소 실험으로 찾아 드립니다.</p>
+      <div class="hero-cta">
+        <a href="#recommend" class="btn-primary">추천 시작하기</a>
+        <a href="#analysis" class="btn-ghost">표본 효율 보기</a>
+      </div>
+    </div>
+    <div class="scroll-cue">▼ 아래로 스크롤</div>
+  </section>
+
+<div class="container">
+
+  <!-- ① 추천 -->
+  <section id="recommend" class="reveal">
+    <h1 class="sec-head">① 배합 추천</h1>
+    <p class="sec-desc">원하는 물성 조건만 입력하면, 학습된 예측 모델 + 최적화 엔진이
+       조건을 만족하는 최적 배합·공정 조건을 계산합니다.</p>
+    <div class="grid">
+      <div class="card">
+        <h2>물성 조건 입력</h2>
+        <table>
+          <thead><tr><th>물성</th><th>최대화</th><th>하한 (≥)</th></tr></thead>
+          <tbody id="propBody"></tbody>
+        </table>
+        <label class="nonemax">
+          <input type="radio" name="maximize" value="">최대화 지정 안 함 (균형 최적)
+        </label>
+        <button class="go" id="goBtn">최적 배합 추천받기</button>
+        <p class="foot">· '최대화'는 하나만 선택하거나, 지정하지 않을 수 있습니다.<br>
+           · 물성 간 트레이드오프(예: 투명도↔차단성)로 하한이 빡빡하면 최대화값이 낮아질 수 있습니다.</p>
+      </div>
+      <div class="card">
+        <h2>추천 결과</h2>
+        <div id="result"><div class="result-empty">조건을 입력하고 버튼을 누르면<br>결과가 여기 표시됩니다.</div></div>
+        <div class="chart-box" style="margin-top:16px; display:none" id="resChartBox">
+          <canvas id="resChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② 분석 -->
+  <section id="analysis" class="reveal">
+    <h1 class="sec-head">② 표본 효율 분석 — BO vs 랜덤 탐색</h1>
+    <p class="sec-desc">"최소 실험으로 최적 배합"을 입증합니다. 같은 오라클·같은 예산에서
+       베이지안 최적화(BO)가 랜덤 탐색보다 적은 실험으로 더 높은 물성에 도달함을 보입니다.</p>
+    <div class="card">
+      <div id="convStats"></div>
+      <div class="chart-box"><canvas id="convChart"></canvas></div>
+      <button class="go" id="convBtn" style="max-width:260px">분석 실행 (수렴 곡선 계산)</button>
+      <p class="foot">여러 시드 평균 곡선 + ±1σ 음영. 계산에 수 초 걸릴 수 있습니다.</p>
+    </div>
+  </section>
+
+  <!-- ③ 정보 -->
+  <section id="about" class="reveal">
+    <h1 class="sec-head">③ 모델 정보</h1>
+    <div class="card">
+      <p style="font-size:14px; line-height:1.7; margin:0">
+        <b>오라클(대리 실험):</b> HistGradientBoosting 회귀모델이 조성·공정(7) → 물성(3)을 예측합니다.
+        held-out 테스트에서 세 물성 모두 <b>R² ≥ 0.9</b>.<br>
+        <b>추천 엔진:</b> 조성 합=100 제약을 만족하는 배합 공간에서, 제약(하한)을 지키며 목표 물성을
+        최대화(또는 균형 최적)하도록 조밀 전역탐색 + 국소 정밀화로 해를 찾습니다.<br>
+        <b>표본 효율:</b> 실제 탐색 루프에서는 GP 대리모델 + EI 획득함수로 다음 실험점을 고르며,
+        exploration/exploitation 균형을 조절합니다.
+      </p>
+      <div id="r2box" class="foot"></div>
+    </div>
+  </section>
+
+</div>
+</main>
+
+<script>
+const PROPS = [
+  {key:"tensile_strength", label:"인장강도", def_min:50},
+  {key:"transparency",     label:"투명도",   def_min:85},
+  {key:"barrier",          label:"차단성",   def_min:null, def_max:true},
+];
+const FEAT_LABEL = {
+  resin_A_ratio:"resin_A_ratio", resin_B_ratio:"resin_B_ratio", plasticizer:"plasticizer",
+  compatibilizer:"compatibilizer", uv_stabilizer:"uv_stabilizer",
+  process_temp:"process_temp", draw_ratio:"draw_ratio"
+};
+
+/* ---------- 입력 행 ---------- */
+const body = document.getElementById("propBody");
+PROPS.forEach(p => {
+  const tr = document.createElement("tr"); tr.className = "prop-row";
+  tr.innerHTML = `
+    <td>${p.label}</td>
+    <td><input type="radio" name="maximize" value="${p.key}" ${p.def_max?"checked":""}></td>
+    <td><input type="number" step="0.1" id="min_${p.key}" placeholder="—" value="${p.def_min ?? ""}"></td>`;
+  body.appendChild(tr);
+});
+function syncDisabled(){
+  const max = document.querySelector('input[name=maximize]:checked').value;
+  PROPS.forEach(p=>{
+    const inp = document.getElementById("min_"+p.key);
+    inp.disabled = (p.key === max);
+    if(p.key === max) inp.value = "";
+  });
+}
+document.querySelectorAll('input[name=maximize]').forEach(r=>r.addEventListener("change", syncDisabled));
+syncDisabled();
+
+/* ---------- 프리셋 ---------- */
+document.querySelectorAll(".preset").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const max = btn.dataset.max;
+    const mins = JSON.parse(btn.dataset.mins);
+    document.querySelector(`input[name=maximize][value="${max}"]`).checked = true;
+    syncDisabled();
+    PROPS.forEach(p=>{
+      const inp = document.getElementById("min_"+p.key);
+      if(!inp.disabled) inp.value = (p.key in mins) ? mins[p.key] : "";
+    });
+    closeDrawer();
+    document.getElementById("recommend").scrollIntoView();
+  });
+});
+
+/* ---------- 추천 요청 ---------- */
+let resChart = null;
+const btn = document.getElementById("goBtn");
+btn.addEventListener("click", async ()=>{
+  const maximize = document.querySelector('input[name=maximize]:checked').value;
+  const mins = {};
+  PROPS.forEach(p=>{
+    const inp = document.getElementById("min_"+p.key);
+    if(!inp.disabled && inp.value !== "") mins[p.key] = parseFloat(inp.value);
+  });
+  btn.disabled = true; btn.textContent = "계산 중…";
+  try{
+    const res = await fetch("/recommend", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({maximize, mins})});
+    render(await res.json());
+  }catch(e){
+    document.getElementById("result").innerHTML =
+      `<div class="result-empty" style="color:#dc2626">오류: ${e}</div>`;
+  }finally{ btn.disabled=false; btn.textContent="최적 배합 추천받기"; }
+});
+
+function render(d){
+  const maxLabel = d.maximize ? PROPS.find(p=>p.key===d.maximize).label : null;
+  const feas = d.feasible
+    ? `<span class="badge ok">✔ 조건 충족</span>`
+    : `<span class="badge bad">✖ 모든 조건 만족 배합 없음 · 근사 최적 제시</span>`;
+  let form = `<table class="rec-table">`;
+  for(const [k,v] of Object.entries(d.formulation))
+    form += `<tr><td>${FEAT_LABEL[k]}</td><td class="val">${v.toFixed(k==="draw_ratio"?2:1)}</td><td class="unit">${d.units[k]||""}</td></tr>`;
+  form += `</table>`;
+  let props = `<table class="rec-table">`;
+  for(const [k,v] of Object.entries(d.predicted)){
+    const p = PROPS.find(x=>x.key===k); let mark="";
+    if(k===d.maximize) mark=` <span class="hl">← 최대화</span>`;
+    else if(k in d.constraints){ const ok=d.satisfied[k];
+      mark=` <span class="${ok?'chk':'cross'}">${ok?'✔':'✖'} ≥ ${d.constraints[k]}</span>`; }
+    props += `<tr><td>${p.label}</td><td class="val">${v.toFixed(2)}</td><td>${mark}</td></tr>`;
+  }
+  props += `</table>`;
+  document.getElementById("result").innerHTML = `
+    <div>${feas}</div>
+    <div class="sec-title">추천 배합·공정 조건</div>${form}
+    <div class="sec-title">예상 물성${maxLabel?` (${maxLabel} 최대화)`:" (균형 최적)"}</div>${props}`;
+  drawResChart(d);
+  document.getElementById("r2box").innerHTML =
+    `오라클 R²: 인장 ${d.oracle_r2.tensile_strength.toFixed(3)} · 투명 ${d.oracle_r2.transparency.toFixed(3)} · 차단 ${d.oracle_r2.barrier.toFixed(3)}`;
+}
+
+function drawResChart(d){
+  const box = document.getElementById("resChartBox"); box.style.display="block";
+  const labels = PROPS.map(p=>p.label);
+  const pred = PROPS.map(p=>d.predicted[p.key]);
+  const thr  = PROPS.map(p=> (p.key in d.constraints) ? d.constraints[p.key] : null);
+  const colors = PROPS.map(p=>{
+    if(p.key===d.maximize) return "#c0392b";
+    if(p.key in d.constraints) return d.satisfied[p.key] ? "#16a34a" : "#dc2626";
+    return "#94a3b8";
+  });
+  const cfg = {
+    type:"bar",
+    data:{ labels, datasets:[
+      {label:"예측 물성", data:pred, backgroundColor:colors, borderRadius:6, categoryPercentage:.6},
+      {label:"요구 하한(≥)", data:thr, backgroundColor:"rgba(100,116,139,.35)",
+       borderColor:"#64748b", borderWidth:1, borderRadius:4, categoryPercentage:.6},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ boxWidth:12, font:{size:11} } },
+        title:{ display:true, text:"추천 배합의 예상 물성 vs 요구 하한" } },
+      scales:{ y:{ beginAtZero:true } } }
+  };
+  if(resChart) resChart.destroy();
+  resChart = new Chart(document.getElementById("resChart"), cfg);
+}
+
+/* ---------- 수렴 곡선 ---------- */
+let convChart=null;
+const convBtn=document.getElementById("convBtn");
+convBtn.addEventListener("click", async ()=>{
+  convBtn.disabled=true; convBtn.textContent="계산 중… (수 초)";
+  try{
+    const d = await (await fetch("/convergence")).json();
+    drawConv(d);
+    let reachTxt = d.reach ? `${d.reach}회` : "—";
+    document.getElementById("convStats").innerHTML = `
+      <div class="stat"><b>${d.bo_final}</b><span>BO 40회 도달 점수</span></div>
+      <div class="stat"><b>${d.rand_final}</b><span>랜덤 40회 도달 점수</span></div>
+      <div class="stat"><b>${reachTxt}</b><span>BO가 랜덤40회 성과를<br>따라잡은 실험 수</span></div>`;
+    convBtn.style.display="none";
+  }catch(e){ convBtn.textContent="오류 — 다시 시도"; convBtn.disabled=false; }
+});
+function band(mean,std,sign){ return mean.map((m,i)=>+(m+sign*std[i]).toFixed(4)); }
+function drawConv(d){
+  const xs=d.xs;
+  const cfg={ type:"line",
+    data:{ labels:xs, datasets:[
+      {label:"_boLo", data:band(d.bo_mean,d.bo_std,-1), borderColor:"transparent", pointRadius:0, fill:false},
+      {label:"BO ±1σ", data:band(d.bo_mean,d.bo_std,+1), borderColor:"transparent",
+        backgroundColor:"rgba(192,57,43,.13)", pointRadius:0, fill:"-1"},
+      {label:"_rdLo", data:band(d.rand_mean,d.rand_std,-1), borderColor:"transparent", pointRadius:0, fill:false},
+      {label:"Random ±1σ", data:band(d.rand_mean,d.rand_std,+1), borderColor:"transparent",
+        backgroundColor:"rgba(44,62,80,.10)", pointRadius:0, fill:"-1"},
+      {label:"Bayesian Optimization", data:d.bo_mean, borderColor:"#c0392b", borderWidth:2.6,
+        pointRadius:0, tension:.2},
+      {label:"Random Search", data:d.rand_mean, borderColor:"#2c3e50", borderDash:[6,4],
+        borderWidth:2.6, pointRadius:0, tension:.2},
+      {label:`기존 600 최고 (${d.base_best})`, data:xs.map(()=>d.base_best),
+        borderColor:"#94a3b8", borderDash:[2,3], borderWidth:1.5, pointRadius:0},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ title:{display:true, text:`표본 효율: BO vs 랜덤 (${d.seeds} 시드 평균)`},
+        legend:{ labels:{ boxWidth:14, font:{size:11},
+          filter:(it)=>!it.text.startsWith("_") } } },
+      scales:{ x:{ title:{display:true, text:"실험 횟수 (오라클 쿼리)"} },
+        y:{ title:{display:true, text:"발견한 최고 물성 점수 (정규화 가중합)"} } } }
+  };
+  if(convChart) convChart.destroy();
+  convChart = new Chart(document.getElementById("convChart"), cfg);
+}
+
+/* ---------- 드로어 ---------- */
+const sidebar=document.getElementById("sidebar"), overlay=document.getElementById("overlay");
+function openDrawer(){ sidebar.classList.add("open"); overlay.classList.add("show"); }
+function closeDrawer(){ sidebar.classList.remove("open"); overlay.classList.remove("show"); }
+document.getElementById("hamb").addEventListener("click", ()=>{
+  sidebar.classList.contains("open") ? closeDrawer() : openDrawer(); });
+overlay.addEventListener("click", closeDrawer);
+document.querySelectorAll('.sidebar a.side-link').forEach(a=>a.addEventListener("click", closeDrawer));
+
+/* ---------- 스크롤 등장 애니메이션 ---------- */
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("visible"); io.unobserve(e.target); } });
+}, {threshold:.12});
+document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+</script>
+</body>
+</html>
