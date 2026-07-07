@@ -80,13 +80,13 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/chart.umd.min.js":
             self._send(200, (HERE / "chart.umd.min.js").read_bytes(),
                        "application/javascript; charset=utf-8")
-        elif self.path == "/convergence":
+        elif self.path in ("/convergence", "/convergence.json"):
             self._send(200, json.dumps(compute_convergence()))
         else:
             self._send(404, json.dumps({"error": "not found"}))
 
     def do_POST(self):
-        if self.path != "/recommend":
+        if self.path not in ("/recommend", "/api/recommend"):
             self._send(404, json.dumps({"error": "not found"})); return
         try:
             n = int(self.headers.get("Content-Length", 0))

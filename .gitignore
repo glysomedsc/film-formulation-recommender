@@ -9,3 +9,6 @@ Thumbs.db
 # 과제 제공 원본 데이터 (업로드 제외)
 concrete_strength.csv
 starters.zip
+
+.vercel
+.env*

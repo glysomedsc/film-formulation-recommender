@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/*.py": {
+      "includeFiles": "film_experiments.csv",
+      "maxDuration": 30
+    }
+  }
+}

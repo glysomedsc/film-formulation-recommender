@@ -1,0 +1,11 @@
+[project]
+name = "film-formulation-recommender"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26,<3",
+    "scikit-learn>=1.4,<2",
+]
+
+[tool.vercel]
+entrypoint = "api.recommend:handler"

@@ -1,0 +1,11 @@
+.venv
+__pycache__
+.git
+.gitignore
+starters.zip
+concrete_strength.csv
+bo_vs_random.png
+*.ipynb
+server.py
+recommender.py
+film_bo.py

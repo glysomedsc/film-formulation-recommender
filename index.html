@@ -310,7 +310,7 @@ btn.addEventListener("click", async ()=>{
   });
   btn.disabled = true; btn.textContent = "계산 중…";
   try{
-    const res = await fetch("/recommend", {method:"POST", headers:{"Content-Type":"application/json"},
+    const res = await fetch("/api/recommend", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({maximize, mins})});
     render(await res.json());
   }catch(e){
@@ -378,7 +378,7 @@ const convBtn=document.getElementById("convBtn");
 convBtn.addEventListener("click", async ()=>{
   convBtn.disabled=true; convBtn.textContent="계산 중… (수 초)";
   try{
-    const d = await (await fetch("/convergence")).json();
+    const d = await (await fetch("/convergence.json")).json();
     drawConv(d);
     let reachTxt = d.reach ? `${d.reach}회` : "—";
     document.getElementById("convStats").innerHTML = `
